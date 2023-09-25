@@ -19,11 +19,6 @@ Using [openface](https://github.com/TadasBaltrusaitis/OpenFace) to detect smooth
 |--|--|--|--|--|--|
 | 2D landmark & tracked videos | Mask aligned image | Use dynamic AU models | Show video  | Openface (MTCNN)| CE-CLM |
 
-Or, command：
-```shell
-./FeatureExtraction -f /path/to/25fps.mp4 -out_dir /path/to/output -2Dfp
-```
-
 The detected facial landmarks are saved in "xxxx.csv". Run 
   ```python 
 python inference.py --mouth_region_size=256 --source_video_path= custom video path --source_openface_landmark_path=  detected landmark path --driving_audio_path= driving audio path --pretrained_clip_DINet_path=./asserts/clip_training_DINet_256mouth.pth  

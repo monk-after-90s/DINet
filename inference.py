@@ -38,7 +38,7 @@ if __name__ == '__main__':
     video_frame_dir = opt.source_video_path.replace('.mp4', '')
     if not os.path.exists(video_frame_dir):
         os.mkdir(video_frame_dir)
-    video_size = extract_frames_from_video(opt.source_video_path, video_frame_dir)
+    video_size = extract_frames_from_video(opt.source_video_path, video_frame_dir)  # 视频处理 逐帧保存为图片
     ############################################## extract deep speech feature ##############################################
     print('extracting deepspeech feature from : {}'.format(opt.driving_audio_path))
     if not os.path.exists(opt.deepspeech_model_path):
@@ -46,15 +46,15 @@ if __name__ == '__main__':
     DSModel = DeepSpeech(opt.deepspeech_model_path)
     if not os.path.exists(opt.driving_audio_path):
         raise ('wrong audio path :{}'.format(opt.driving_audio_path))
-    ds_feature = DSModel.compute_audio_feature(opt.driving_audio_path)
+    ds_feature = DSModel.compute_audio_feature(opt.driving_audio_path)  # 音频处理为推理所用数据
     res_frame_length = ds_feature.shape[0]
     ds_feature_padding = np.pad(ds_feature, ((2, 2), (0, 0)), mode='edge')
     ############################################## load facial landmark ##############################################
-    print('loading facial landmarks from : {}'.format(opt.source_openface_landmark_path))
+    print('loading facial landmarks from : {}'.format(opt.source_openface_landmark_path))  # 仍是视频处理 人脸遮罩数据
     if not os.path.exists(opt.source_openface_landmark_path):
         raise ('wrong facial landmark path :{}'.format(opt.source_openface_landmark_path))
     video_landmark_data = load_landmark_openface(opt.source_openface_landmark_path).astype(np.int)
-    ############################################## align frame with driving audio ##############################################
+    ############################################## align frame with driving audio ##############################################从视频无限回环中截取以对齐音频
     print('aligning frames with driving audio')
     video_frame_path_list = glob.glob(os.path.join(video_frame_dir, '*.jpg'))
     if len(video_frame_path_list) != video_landmark_data.shape[0]:
@@ -97,12 +97,12 @@ if __name__ == '__main__':
                        ref_landmark[29, 1] - crop_radius:ref_landmark[29, 1] + crop_radius * 2 + crop_radius_1_4,
                        ref_landmark[33, 0] - crop_radius - crop_radius_1_4:ref_landmark[
                                                                                33, 0] + crop_radius + crop_radius_1_4,
-                       :]
+                       :]  # 裁剪鼻嘴部
         ref_img_crop = cv2.resize(ref_img_crop, (resize_w, resize_h))
-        ref_img_crop = ref_img_crop / 255.0
+        ref_img_crop = ref_img_crop / 255.0  # 颜色比例
         ref_img_list.append(ref_img_crop)
     ref_video_frame = np.concatenate(ref_img_list, 2)
-    ref_img_tensor = torch.from_numpy(ref_video_frame).permute(2, 0, 1).unsqueeze(0).float().cuda()
+    ref_img_tensor = torch.from_numpy(ref_video_frame).permute(2, 0, 1).unsqueeze(0).float().cuda()  # 预加载
 
     ############################################## load pretrained model weight ##############################################
     print('loading pretrained model from: {}'.format(opt.pretrained_clip_DINet_path))
@@ -132,17 +132,17 @@ if __name__ == '__main__':
         print('synthesizing {}/{} frame'.format(clip_end_index - 5, pad_length - 5))
         crop_flag, crop_radius = compute_crop_radius(video_size,
                                                      res_video_landmark_data_pad[clip_end_index - 5:clip_end_index, :,
-                                                     :], random_scale=1.05)
+                                                     :], random_scale=1.05)  # 5个图片一包，窗口移动处理
         if not crop_flag:
             raise ('our method can not handle videos with large change of facial size!!')
         crop_radius_1_4 = crop_radius // 4
-        frame_data = cv2.imread(res_video_frame_path_list_pad[clip_end_index - 3])[:, :, ::-1]
+        frame_data = cv2.imread(res_video_frame_path_list_pad[clip_end_index - 3])[:, :, ::-1]  # 包里面5个图片的中间那个
         frame_landmark = res_video_landmark_data_pad[clip_end_index - 3, :, :]
         crop_frame_data = frame_data[
                           frame_landmark[29, 1] - crop_radius:frame_landmark[29, 1] + crop_radius * 2 + crop_radius_1_4,
                           frame_landmark[33, 0] - crop_radius - crop_radius_1_4:frame_landmark[
                                                                                     33, 0] + crop_radius + crop_radius_1_4,
-                          :]
+                          :]  # 裁剪鼻嘴区
         crop_frame_h, crop_frame_w = crop_frame_data.shape[0], crop_frame_data.shape[1]
         crop_frame_data = cv2.resize(crop_frame_data, (resize_w, resize_h))  # [32:224, 32:224, :]
         crop_frame_data = crop_frame_data / 255.0
@@ -155,7 +155,7 @@ if __name__ == '__main__':
             0).float().cuda()
         with torch.no_grad():
             pre_frame = model(crop_frame_tensor, ref_img_tensor, deepspeech_tensor)
-            pre_frame = pre_frame.squeeze(0).permute(1, 2, 0).detach().cpu().numpy() * 255
+            pre_frame = pre_frame.squeeze(0).permute(1, 2, 0).detach().cpu().numpy() * 255  # 鼻嘴部推理
         videowriter_face.write(pre_frame[:, :, ::-1].copy().astype(np.uint8))
         pre_frame_resize = cv2.resize(pre_frame, (crop_frame_w, crop_frame_h))
         frame_data[
@@ -163,7 +163,7 @@ if __name__ == '__main__':
         frame_landmark[29, 1] + crop_radius * 2,
         frame_landmark[33, 0] - crop_radius - crop_radius_1_4:
         frame_landmark[33, 0] + crop_radius + crop_radius_1_4,
-        :] = pre_frame_resize[:crop_radius * 3, :, :]
+        :] = pre_frame_resize[:crop_radius * 3, :, :]  # 将推理的鼻嘴部写回原帧
         videowriter.write(frame_data[:, :, ::-1])
     videowriter.release()
     videowriter_face.release()
